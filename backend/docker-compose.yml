@@ -1,0 +1,10 @@
+services:
+  api:
+    build: .
+    container_name: kapture_backend
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: "postgresql+psycopg://kapture_user:kapture_password@host.docker.internal:5433/kapture"
+    ports:
+      - "8000:8000"
