@@ -1,5 +1,11 @@
 from datetime import datetime
 
+from app.core.voice_metrics import (
+    VOICE_CALLS_ACTIVE,
+    VOICE_CALLS_COMPLETED_TOTAL,
+    VOICE_CALL_DURATION_SECONDS,
+    VOICE_CALLS_STARTED_TOTAL,
+)
 from app.models.call_log import CallLog
 from app.db.repositories.call_log_repository import CallLogRepository
 
@@ -23,7 +29,12 @@ class CallLogService:
             started_at=datetime.utcnow(),
         )
 
-        return self.repository.create(call_log)
+        result = self.repository.create(call_log)
+
+        VOICE_CALLS_STARTED_TOTAL.inc()
+        VOICE_CALLS_ACTIVE.inc()
+
+        return result
 
     def get_call_log(
         self,
@@ -64,4 +75,17 @@ class CallLogService:
 
         call_log.ended_at = datetime.utcnow()
 
-        return self.repository.update(call_log)
+        result = self.repository.update(call_log)
+
+        VOICE_CALLS_COMPLETED_TOTAL.inc()
+        VOICE_CALLS_ACTIVE.dec()
+
+        if call_log.started_at is not None:
+            duration = (
+                call_log.ended_at - call_log.started_at
+            ).total_seconds()
+
+            if duration >= 0:
+                VOICE_CALL_DURATION_SECONDS.observe(duration)
+
+        return result

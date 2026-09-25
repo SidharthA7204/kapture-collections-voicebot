@@ -223,3 +223,13 @@ def test_database_session_is_reusable_after_rollback(
         repository.get_by_call_id(new_call_id)
         is not None
     )
+
+def test_database_pool_configuration():
+    assert engine.pool.size() == settings.DB_POOL_SIZE
+    assert engine.pool._max_overflow == settings.DB_MAX_OVERFLOW
+    assert engine.pool._timeout == settings.DB_POOL_TIMEOUT
+    assert engine.pool._recycle == settings.DB_POOL_RECYCLE
+
+
+def test_database_pool_uses_pre_ping():
+    assert engine.pool._pre_ping is True

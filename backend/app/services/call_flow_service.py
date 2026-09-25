@@ -1,4 +1,4 @@
-from datetime import date
+﻿from datetime import date
 
 from app.schemas.intent_action import IntentAction
 from app.services.call_log_service import CallLogService
@@ -310,6 +310,7 @@ class CallFlowService:
         loan_id: int | None = None,
         amount=None,
         promise_date: date | None = None,
+        dispute_description: str | None = None,
     ):
         if action == IntentAction.PROMISE_TO_PAY:
             if customer_id is None:
@@ -344,6 +345,48 @@ class CallFlowService:
                     amount=amount,
                     promise_date=promise_date,
                     commit=False,
+                )
+
+                disposition = (
+                    self.collections_intent_service
+                    .determine_disposition(action)
+                )
+
+                self.call_log_service.record_disposition(
+                    call_id=call_id,
+                    disposition=disposition.value,
+                    commit=False,
+                )
+
+                self.transition(
+                    call_id=call_id,
+                    machine=machine,
+                    next_state=CallState.DISPOSITION,
+                    commit=False,
+                )
+
+                return disposition
+
+        if action == IntentAction.DISPUTE:
+            if customer_id is None:
+                raise ValueError(
+                    "Customer ID is required for a dispute."
+                )
+
+            if self.transaction_manager is None:
+                raise RuntimeError(
+                    "Transaction manager is not configured."
+                )
+
+            with self.transaction_manager():
+                self.collections_intent_service.create_dispute(
+                    customer_id=customer_id,
+                    loan_id=loan_id,
+                    reason="CUSTOMER_DISPUTE",
+                    description=(
+                        dispute_description
+                        or "Customer disputed the overdue charge."
+                    ),
                 )
 
                 disposition = (
@@ -478,4 +521,5 @@ class CallFlowService:
         )
 
         return machine
+
 

@@ -17,6 +17,11 @@ class Settings(BaseSettings):
         "kapture_password@localhost:5432/kapture"
     )
 
+    DB_POOL_SIZE: int = 5
+    DB_MAX_OVERFLOW: int = 10
+    DB_POOL_TIMEOUT: float = 30.0
+    DB_POOL_RECYCLE: int = 1800
+
     LOG_LEVEL: str = "INFO"
 
     GROQ_API_KEY: str = ""
@@ -108,8 +113,29 @@ class Settings(BaseSettings):
 
         return self
 
+    @model_validator(mode="after")
+    def validate_database_pool(self):
+        if self.DB_POOL_SIZE <= 0:
+            raise ValueError(
+                "DB_POOL_SIZE must be greater than 0."
+            )
+
+        if self.DB_MAX_OVERFLOW < 0:
+            raise ValueError(
+                "DB_MAX_OVERFLOW must be greater than or equal to 0."
+            )
+
+        if self.DB_POOL_TIMEOUT <= 0:
+            raise ValueError(
+                "DB_POOL_TIMEOUT must be greater than 0."
+            )
+
+        if self.DB_POOL_RECYCLE <= 0:
+            raise ValueError(
+                "DB_POOL_RECYCLE must be greater than 0."
+            )
+
+        return self
+
 
 settings = Settings()
-
-
-

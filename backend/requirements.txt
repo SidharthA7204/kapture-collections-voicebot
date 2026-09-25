@@ -12,3 +12,4 @@ httpx2
 pytest
 pytest-asyncio
 groq
+prometheus-client

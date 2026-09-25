@@ -1,3 +1,4 @@
+from app.core.voice_metrics import VOICE_CALLS_ENDED_TOTAL
 from app.db.repositories.call_event_repository import (
     CallEventRepository,
 )
@@ -123,4 +124,8 @@ class CallEventService:
             to_state="END",
         )
 
-        return self.repository.create(event)
+        result = self.repository.create(event)
+
+        VOICE_CALLS_ENDED_TOTAL.inc()
+
+        return result

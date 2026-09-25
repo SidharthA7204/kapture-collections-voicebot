@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, HTTPException
+﻿from fastapi import APIRouter, Depends, HTTPException, HTTPException
 
 from app.api.dependencies import (
     get_ai_action_service,
@@ -141,12 +141,20 @@ def ai_execute(
         extraction
     )
 
+    if machine.current_state == CallState.DISCLOSE_OVERDUE:
+        call_flow_service.transition(
+            call_id=request.call_id,
+            machine=machine,
+            next_state=CallState.INTENT_HANDLING,
+        )
+
     disposition = ai_action_service.execute(
         call_id=request.call_id,
         customer_id=request.customer_id,
         loan_id=request.loan_id,
         machine=machine,
         extraction=extraction,
+        user_message=request.message,
     )
 
     call_flow_service.end_call(
@@ -160,6 +168,8 @@ def ai_execute(
         action=action,
         disposition=disposition.value,
     )
+
+
 
 
 

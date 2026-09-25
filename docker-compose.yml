@@ -16,10 +16,101 @@ services:
       - postgres_data:/var/lib/postgresql/data
 
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U kapture_user -d kapture"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U kapture_user -d kapture"
+        ]
       interval: 5s
       timeout: 5s
       retries: 5
+      start_period: 5s
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+
+    container_name: kapture_backend
+
+    restart: unless-stopped
+
+    env_file:
+      - ./backend/.env
+
+    environment:
+      DATABASE_URL: "postgresql+psycopg://kapture_user:kapture_password@postgres:5432/kapture"
+
+    expose:
+      - "8000"
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: kapture_nginx
+    restart: unless-stopped
+
+    ports:
+      - "80:80"
+
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+
+    depends_on:
+      api:
+        condition: service_healthy
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    container_name: kapture_prometheus
+    restart: unless-stopped
+
+    ports:
+      - "9090:9090"
+
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+
+    depends_on:
+      api:
+        condition: service_healthy
+
+  grafana:
+    image: grafana/grafana:12.2.0
+    container_name: kapture_grafana
+    restart: unless-stopped
+
+    ports:
+      - "3000:3000"
+
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+
+    depends_on:
+      prometheus:
+        condition: service_started
 
 volumes:
   postgres_data:
+  prometheus_data:
+  grafana_data:
+

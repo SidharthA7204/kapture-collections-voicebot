@@ -37,10 +37,10 @@ def test_action_variants(
         customer_id = None
         loan_id = None
 
-        if action == "PROMISE_TO_PAY":
+        if action in ("PROMISE_TO_PAY", "DISPUTE"):
             customer = Customer(
-                name="PTP API Test Customer",
-                phone="9400000022",
+                name=f"{action} Test Customer",
+                phone=f"94000000{10 if action == 'PROMISE_TO_PAY' else '11'}",
             )
 
             db_session.add(customer)
@@ -91,11 +91,17 @@ def test_action_variants(
             "action": action,
         }
 
-        if action == "PROMISE_TO_PAY":
+        if action in ("PROMISE_TO_PAY", "DISPUTE"):
             action_body.update(
                 {
                     "customer_id": customer_id,
                     "loan_id": loan_id,
+                }
+            )
+
+        if action == "PROMISE_TO_PAY":
+            action_body.update(
+                {
                     "amount": "5000.00",
                     "promise_date": (
                         date.today()
@@ -110,19 +116,15 @@ def test_action_variants(
         )
 
         if response.status_code != 200:
-            print("PTP API ERROR:", response.status_code)
-            print("PTP API BODY:", response.text)
+            print("ACTION API ERROR:", response.status_code)
+            print("ACTION API BODY:", response.text)
 
         assert response.status_code == 200
 
         data = response.json()
 
         assert data["call_id"] == call_id
-        assert (
-            data["disposition"]
-            == expected_disposition
-        )
+        assert data["disposition"] == expected_disposition
 
     finally:
         app.dependency_overrides.clear()
-

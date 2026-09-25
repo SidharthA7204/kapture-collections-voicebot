@@ -1,9 +1,9 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from fastapi.responses import JSONResponse
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.exceptions import RequestValidationError
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -16,6 +16,12 @@ from app.api.exception_handlers import (
     value_error_handler,
 )
 from app.core.config import settings
+from app.core.health_metrics import (
+    HEALTH_CHECKS_TOTAL,
+    HEALTH_CHECK_FAILURES_TOTAL,
+    READINESS_CHECKS_TOTAL,
+    READINESS_CHECK_FAILURES_TOTAL,
+)
 from app.core.logging import configure_logging, logger
 from app.db.database import engine
 from app.middleware.request_context import (
@@ -123,7 +129,7 @@ async def health_check():
         "database": database_status,
     }
 
- 
+
 @app.get("/ready")
 async def readiness_check():
     database_status = "healthy"
@@ -159,5 +165,11 @@ async def readiness_check():
 
     return response
 
- 
+
+@app.get("/metrics")
+async def metrics():
+    return Response(
+        content=generate_latest(),
+        media_type=CONTENT_TYPE_LATEST,
+    )
 

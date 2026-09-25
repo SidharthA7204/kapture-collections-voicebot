@@ -1,6 +1,14 @@
 from groq import APITimeoutError, Groq
 
 from app.core.config import settings
+from app.core.groq_metrics import (
+    GROQ_ERRORS_TOTAL,
+    GROQ_REQUESTS_TOTAL,
+    GROQ_REQUEST_DURATION_SECONDS,
+    GROQ_SUCCESS_TOTAL,
+    GROQ_TIMEOUTS_TOTAL,
+)
+import time
 
 
 class GroqServiceError(Exception):
@@ -46,6 +54,9 @@ class GroqService:
             }
         )
 
+        GROQ_REQUESTS_TOTAL.inc()
+        start_time = time.perf_counter()
+
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
@@ -59,20 +70,31 @@ class GroqService:
             )
 
         except APITimeoutError as exc:
+            GROQ_TIMEOUTS_TOTAL.inc()
+            GROQ_ERRORS_TOTAL.inc()
             raise GroqServiceError(
                 "Groq request timed out."
             ) from exc
 
         except Exception as exc:
+            GROQ_ERRORS_TOTAL.inc()
             raise GroqServiceError(
                 "Failed to generate response from Groq."
             ) from exc
 
+        finally:
+            GROQ_REQUEST_DURATION_SECONDS.observe(
+                time.perf_counter() - start_time
+            )
+
         content = response.choices[0].message.content
 
         if not content:
+            GROQ_ERRORS_TOTAL.inc()
             raise GroqServiceError(
                 "Groq returned an empty response."
             )
+
+        GROQ_SUCCESS_TOTAL.inc()
 
         return content

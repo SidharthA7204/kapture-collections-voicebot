@@ -1,10 +1,6 @@
-from datetime import date
-from decimal import Decimal
-
 from app.schemas.conversation_extraction import (
     ConversationExtraction,
 )
-from app.schemas.intent_action import IntentAction
 from app.services.call_flow_service import CallFlowService
 from app.services.ai_intent_service import AIIntentService
 
@@ -26,17 +22,25 @@ class AIActionService:
         loan_id: int | None,
         machine,
         extraction: ConversationExtraction,
+        user_message: str | None = None,
     ):
         action = self.intent_service.determine_action(
             extraction
         )
 
+        kwargs = {
+            "call_id": call_id,
+            "machine": machine,
+            "action": action,
+            "customer_id": customer_id,
+            "loan_id": loan_id,
+            "amount": extraction.amount,
+            "promise_date": extraction.promise_date,
+        }
+
+        if user_message is not None:
+            kwargs["dispute_description"] = user_message
+
         return self.call_flow_service.handle_action(
-            call_id=call_id,
-            machine=machine,
-            action=action,
-            customer_id=customer_id,
-            loan_id=loan_id,
-            amount=extraction.amount,
-            promise_date=extraction.promise_date,
+            **kwargs
         )

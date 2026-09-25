@@ -1,6 +1,8 @@
-services:
+﻿services:
   api:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: kapture_backend
     env_file:
       - .env
@@ -8,3 +10,10 @@ services:
       DATABASE_URL: "postgresql+psycopg://kapture_user:kapture_password@host.docker.internal:5433/kapture"
     ports:
       - "8000:8000"
+    networks:
+      - kapture_network
+
+networks:
+  kapture_network:
+    external: true
+    name: kapture-collections-voicebot_default

@@ -13,6 +13,7 @@ from app.db.repositories.session_repository import (
 
 from app.models.customer import Customer
 from app.models.loan import Loan
+from app.models.customer import Customer
 from app.schemas.intent_action import IntentAction
 
 from app.services.assistance_service import AssistanceService
@@ -540,9 +541,18 @@ def test_complete_successful_dispute_call_flow(
 ):
     service = create_service(db_session)
 
+    customer = Customer(
+        name="Dispute Test Customer",
+        phone="9400000012",
+    )
+
+    db_session.add(customer)
+    db_session.commit()
+    db_session.refresh(customer)
+
     machine, _, _ = service.start_call(
         call_id="flow_test_012",
-        customer_id=None,
+        customer_id=customer.id,
     )
 
     service.transition(
@@ -581,6 +591,7 @@ def test_complete_successful_dispute_call_flow(
         call_id="flow_test_012",
         machine=machine,
         action=IntentAction.DISPUTE,
+        customer_id=customer.id,
     )
 
     assert disposition.value == "DISPUTE_RAISED"
@@ -815,3 +826,10 @@ def test_ptp_transaction_rolls_back_on_failure(
     assert refreshed_session.current_state == "INTENT_HANDLING"
 
     assert machine.current_state == CallState.INTENT_HANDLING
+
+
+
+
+
+
+

@@ -1,5 +1,6 @@
 import json
-from datetime import date
+import re
+from datetime import date, datetime
 from decimal import Decimal
 
 from app.schemas.conversation_extraction import (
@@ -14,7 +15,7 @@ class ConversationExtractionService:
     EXTRACTION_PROMPT = """
 You are a financial collections conversation analyzer.
 
-Analyze the customer's latest message and determine their intent.
+Analyze ONLY the customer's latest message.
 
 Allowed intents:
 - PAY_NOW
@@ -24,28 +25,29 @@ Allowed intents:
 - UNKNOWN
 
 Extract:
-- amount: payment amount if explicitly stated
-- promise_date: promised payment date if explicitly stated
+- amount: payment amount explicitly stated by the customer
+- promise_date: date on which the customer explicitly promises/intends to make payment
+
+Return ONLY valid JSON.
 
 Rules:
-1. Return ONLY valid JSON.
-2. Do not include markdown.
-3. Do not invent missing information.
-4. If amount is not stated, use null.
-5. If promise date is not stated, use null.
-6. Use ISO date format YYYY-MM-DD.
-7. For PROMISE_TO_PAY, extract both amount and date when available.
+1. Do not invent missing information.
+2. If amount is not explicitly stated, return null.
+3. If promise_date is not explicitly stated, return null.
+4. Convert explicit dates to YYYY-MM-DD.
+5. "September 30", "30 September", and "on September 30"
+   are explicit payment dates.
+6. If a specific amount and specific payment date are stated,
+   intent MUST be PROMISE_TO_PAY.
+7. Do not confuse today's date with the promised payment date.
 
 Example:
+"I will pay 5000 on September 30."
 
-Customer:
-"I will pay 5000 on 30 August 2026."
-
-Return:
 {
   "intent": "PROMISE_TO_PAY",
   "amount": "5000.00",
-  "promise_date": "2026-08-30"
+  "promise_date": "2026-09-30"
 }
 """
 
@@ -54,6 +56,107 @@ Return:
         groq_service: GroqService,
     ):
         self.groq_service = groq_service
+
+    def _extract_explicit_date(
+        self,
+        user_message: str,
+    ) -> date | None:
+
+        current_year = date.today().year
+
+        # Example:
+        # September 30
+        # September 30, 2026
+        # Sep 30
+        # Sep 30, 2026
+        month_pattern = (
+            r"\b("
+            r"January|February|March|April|May|June|July|August|"
+            r"September|October|November|December|"
+            r"Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec"
+            r")"
+            r"\s+"
+            r"(\d{1,2})"
+            r"(?:st|nd|rd|th)?"
+            r"(?:,\s*|\s+)?"
+            r"(\d{4})?"
+            r"\b"
+        )
+
+        match = re.search(
+            month_pattern,
+            user_message,
+            re.IGNORECASE,
+        )
+
+        if match:
+            month_name = match.group(1)
+            day = int(match.group(2))
+            year = (
+                int(match.group(3))
+                if match.group(3)
+                else current_year
+            )
+
+            normalized = f"{month_name} {day} {year}"
+
+            for fmt in (
+                "%B %d %Y",
+                "%b %d %Y",
+            ):
+                try:
+                    return datetime.strptime(
+                        normalized,
+                        fmt,
+                    ).date()
+                except ValueError:
+                    continue
+
+        # Example:
+        # 30 September
+        # 30 September 2026
+        day_month_pattern = (
+            r"\b"
+            r"(\d{1,2})"
+            r"(?:st|nd|rd|th)?"
+            r"\s+"
+            r"(January|February|March|April|May|June|July|August|"
+            r"September|October|November|December|"
+            r"Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)"
+            r"(?:\s+(\d{4}))?"
+            r"\b"
+        )
+
+        match = re.search(
+            day_month_pattern,
+            user_message,
+            re.IGNORECASE,
+        )
+
+        if match:
+            day = int(match.group(1))
+            month_name = match.group(2)
+            year = (
+                int(match.group(3))
+                if match.group(3)
+                else current_year
+            )
+
+            normalized = f"{month_name} {day} {year}"
+
+            for fmt in (
+                "%B %d %Y",
+                "%b %d %Y",
+            ):
+                try:
+                    return datetime.strptime(
+                        normalized,
+                        fmt,
+                    ).date()
+                except ValueError:
+                    continue
+
+        return None
 
     def extract(
         self,
@@ -77,6 +180,18 @@ Return:
                 "LLM returned invalid extraction JSON."
             ) from exc
 
+        extracted_date = self._extract_explicit_date(
+            user_message
+        )
+
+        llm_date = (
+            date.fromisoformat(data["promise_date"])
+            if data.get("promise_date") is not None
+            else None
+        )
+
+        promise_date = extracted_date or llm_date
+
         return ConversationExtraction(
             intent=CustomerIntent(data["intent"]),
             amount=(
@@ -84,9 +199,5 @@ Return:
                 if data.get("amount") is not None
                 else None
             ),
-            promise_date=(
-                date.fromisoformat(data["promise_date"])
-                if data.get("promise_date") is not None
-                else None
-            ),
+            promise_date=promise_date,
         )

@@ -9,6 +9,12 @@ from starlette.middleware.base import (
 from starlette.requests import Request
 from starlette.responses import Response
 
+from app.core.metrics import (
+    HTTP_REQUEST_DURATION_SECONDS,
+    HTTP_REQUESTS_IN_PROGRESS,
+    HTTP_REQUESTS_TOTAL,
+)
+
 
 MAX_REQUEST_ID_LENGTH = 128
 
@@ -53,24 +59,44 @@ class RequestContextMiddleware(
 
         start_time = time.perf_counter()
 
+        method = request.method
+        path = request.url.path
+
+        HTTP_REQUESTS_IN_PROGRESS.inc()
+
         logger.info(
             "request_started",
-            method=request.method,
-            path=request.url.path,
+            method=method,
+            path=path,
         )
 
         try:
             response = await call_next(request)
 
+            duration_seconds = (
+                time.perf_counter() - start_time
+            )
+
             duration_ms = round(
-                (time.perf_counter() - start_time) * 1000,
+                duration_seconds * 1000,
                 2,
             )
 
+            HTTP_REQUESTS_TOTAL.labels(
+                method=method,
+                path=path,
+                status=str(response.status_code),
+            ).inc()
+
+            HTTP_REQUEST_DURATION_SECONDS.labels(
+                method=method,
+                path=path,
+            ).observe(duration_seconds)
+
             logger.info(
                 "request_completed",
-                method=request.method,
-                path=request.url.path,
+                method=method,
+                path=path,
                 status_code=response.status_code,
                 duration_ms=duration_ms,
             )
@@ -82,15 +108,30 @@ class RequestContextMiddleware(
             return response
 
         except Exception as exc:
+            duration_seconds = (
+                time.perf_counter() - start_time
+            )
+
             duration_ms = round(
-                (time.perf_counter() - start_time) * 1000,
+                duration_seconds * 1000,
                 2,
             )
 
+            HTTP_REQUESTS_TOTAL.labels(
+                method=method,
+                path=path,
+                status="500",
+            ).inc()
+
+            HTTP_REQUEST_DURATION_SECONDS.labels(
+                method=method,
+                path=path,
+            ).observe(duration_seconds)
+
             logger.error(
                 "request_failed",
-                method=request.method,
-                path=request.url.path,
+                method=method,
+                path=path,
                 duration_ms=duration_ms,
                 error_type=type(exc).__name__,
             )
@@ -98,4 +139,5 @@ class RequestContextMiddleware(
             raise
 
         finally:
+            HTTP_REQUESTS_IN_PROGRESS.dec()
             structlog.contextvars.clear_contextvars()

@@ -1,4 +1,4 @@
-# Python
+# Python cache
 __pycache__/
 *.py[cod]
 *.pyo
@@ -7,22 +7,25 @@ __pycache__/
 .venv/
 venv/
 env/
+ENV/
 
 # Environment / secrets
 .env
 .env.*
 !.env.example
 
-# Testing / coverage
+# Testing
 .pytest_cache/
 .coverage
-.coverage.*
 htmlcov/
-coverage.xml
 
 # IDE
 .vscode/
 .idea/
+
+# Git
+.git/
+.gitignore
 
 # OS
 .DS_Store
@@ -30,6 +33,7 @@ Thumbs.db
 
 # Logs
 *.log
+logs/
 
 # Local databases
 *.db
@@ -39,3 +43,8 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+*.bak
+
+# Documentation / local files
+README*
+check_*.py
